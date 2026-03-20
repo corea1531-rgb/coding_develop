@@ -1,0 +1,27 @@
+**/.venv/
+**/.venv312/
+**/venv/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.vscode/
+
+**/build/
+**/dist/
+
+**/.ipynb_checkpoints/
+
+.env
+.env.*
+
+*.log
+
+Thumbs.db
+.DS_Store
+
+~$*
+
+**/license_cache.json
+**/accounts.jsongit status

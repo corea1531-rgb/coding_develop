@@ -1,0 +1,11 @@
+{
+  "login_codes": ["km123", "km153"],
+  "onchannel": {
+    "sm": { "id": "cth00284@naver.com", "pw": "cth620700!" },
+    "km": { "id": "ckm00285@naver.com", "pw": "ckm620700!" }
+  },
+  "domesin": {
+    "id": "ckm00285",
+    "pw": "cth620700!"
+  }
+}
