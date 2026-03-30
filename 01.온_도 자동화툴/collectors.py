@@ -312,11 +312,6 @@ def collect_domesin_orders(user_ID: str, user_PW: str, logger=None, save_excel: 
         txt = tr.get_text(" ", strip=True)
         return ("연락처1" in txt) and ("주소" in txt)
 
-    def is_main_tr(tr) -> bool:
-        txt = tr.get_text(" ", strip=True)
-        has_date = re.search(r"\d{4}-\d{2}-\d{2}", txt) is not None
-        has_order_no = re.search(r"\b20\d{10,}\b", txt) is not None
-        return has_date or has_order_no
 
     def parse_orders_grouping(html: str, table_css="table.mytable2"):
         soup = BeautifulSoup(html, "html.parser")
@@ -328,24 +323,47 @@ def collect_domesin_orders(user_ID: str, user_PW: str, logger=None, save_excel: 
 
         orders = []
         current_items = []
+        current_customer_info = ""
 
         for tr in trs:
             if is_header_tr(tr):
                 continue
 
             if is_customerinfo_tr(tr):
-                cust_txt = tr.get_text(" ", strip=True)
+                current_customer_info = tr.get_text(" ", strip=True)
                 if current_items:
                     orders.append({
                         "items": current_items,
-                        "customer_info_text": cust_txt
+                        "customer_info_text": current_customer_info
                     })
                     current_items = []
+                    current_customer_info = ""
                 continue
 
-            if is_main_tr(tr):
+            # 주문 시작행이면 새 묶음 시작
+            if is_order_start_tr(tr):
+                if current_items:
+                    orders.append({
+                        "items": current_items,
+                        "customer_info_text": current_customer_info
+                    })
+                    current_items = []
+                    current_customer_info = ""
+
+                if is_item_row_tr(tr):
+                    current_items.append(tr)
+                continue
+
+            # 주문 시작행은 아니지만 같은 주문의 추가 상품행
+            if current_items and is_item_row_tr(tr):
                 current_items.append(tr)
                 continue
+
+        if current_items:
+            orders.append({
+                "items": current_items,
+                "customer_info_text": current_customer_info
+            })
 
         return orders
 
@@ -485,8 +503,22 @@ def collect_domesin_orders(user_ID: str, user_PW: str, logger=None, save_excel: 
             return t if t.isdigit() else ""
         return ""
 
-    def is_item_tr(tr) -> bool:
-        return tr.select_one("b[style*='color:blue']") is not None
+    def is_order_start_tr(tr) -> bool:
+        txt = tr.get_text(" ", strip=True)
+        has_order_no = tr.select_one("div[onclick*='view_order']") is not None
+        has_date = re.search(r"\d{4}-\d{2}-\d{2}", txt) is not None
+        return has_order_no or has_date
+
+    def is_item_row_tr(tr) -> bool:
+        # 첫 행이든 추가 행이든 상품행 자체인지 판단
+        if tr.select_one("td.cttd[style*='text-align:left']") and tr.select_one("b[style*='color:blue']"):
+            return True
+
+        txt = tr.get_text(" ", strip=True)
+        if "업체상품코드" in txt or "택배송장명" in txt:
+            return True
+
+        return False
 
     def extract_order_datetime(first_tr):
         date_pat = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
@@ -600,7 +632,7 @@ def collect_domesin_orders(user_ID: str, user_PW: str, logger=None, save_excel: 
             if not od.get("items"):
                 continue
 
-            item_trs = [tr for tr in od["items"] if is_item_tr(tr)]
+            item_trs = [tr for tr in od["items"] if is_item_row_tr(tr)]
             if not item_trs:
                 continue
 
