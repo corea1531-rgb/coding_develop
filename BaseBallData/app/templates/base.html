@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Baseball App{% endblock %}</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", Arial, sans-serif;
+            background: #f3f4f6;
+            color: #222;
+        }
+        .page-wrap {
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 20px;
+        }
+
+
+        .league-emoji {
+            font-size: 30px;
+            line-height: 1;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1100px;
+        }
+
+        .nav {
+            display: flex;
+            justify-content: center;
+            gap: 14px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .nav a {
+            text-decoration: none;
+            color: #222;
+            font-weight: bold;
+            background: white;
+            padding: 10px 16px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .title {
+            text-align: center;
+            font-size: 34px;
+            margin-bottom: 12px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 36px;
+            font-size: 16px;
+        }
+
+        .league-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 20px;
+        }
+
+        .league-card {
+            background: white;
+            border-radius: 18px;
+            padding: 28px 24px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+            text-align: center;
+            min-height: 240px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+
+        .league-name {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .flag-icon {
+            width: 34px;
+            height: 24px;
+            object-fit: cover;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+        }
+
+        .league-desc {
+            font-size: 15px;
+            color: #666;
+            line-height: 1.8;
+            margin-bottom: 20px;
+        }
+
+        .league-btn {
+            display: inline-block;
+            text-decoration: none;
+            background: #111827;
+            color: white;
+            padding: 12px 18px;
+            border-radius: 10px;
+            font-weight: bold;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+        }
+
+        .game-link {
+            display: inline-block;
+            margin-top: 12px;
+            text-decoration: none;
+            color: #0b57d0;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-wrap">
+        <div class="container">
+            <div class="nav">
+                <a href="/">홈</a>
+                <a href="/kbo">KBO</a>
+                <a href="/npb">NPB</a>
+                <a href="/mlb">MLB</a>
+            </div>
+
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</body>
+</html>

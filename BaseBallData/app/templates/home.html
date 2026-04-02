@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}홈{% endblock %}
+
+{% block content %}
+<h1 class="title">야구 데이터 분석 대시보드</h1>
+<p class="subtitle">리그를 선택해서 당일 경기와 상세 데이터를 확인하세요.</p>
+
+<div class="league-grid">
+    <div class="league-card">
+        <div>
+            <div class="league-name">
+                <img class="flag-icon" src="{{ url_for('static', filename='flags/kr.png') }}" alt="한국 국기">
+                <span>KBO</span>
+            </div>
+            <div class="league-desc">
+                당일 경기 리스트, 선발투수, 팀 누적, 선발타자 데이터 조회
+            </div>
+        </div>
+        <div>
+            <a class="league-btn" href="/kbo">KBO 바로가기</a>
+        </div>
+    </div>
+
+    <div class="league-card">
+        <div>
+            <div class="league-name">
+                <img class="flag-icon" src="{{ url_for('static', filename='flags/jp.png') }}" alt="일본 국기">
+                <span>NPB</span>
+            </div>
+            <div class="league-desc">
+                이후 KBO와 동일한 구조로 확장 예정
+            </div>
+        </div>
+        <div>
+            <a class="league-btn" href="/npb">NPB 바로가기</a>
+        </div>
+    </div>
+
+    <div class="league-card">
+        <div>
+            <div class="league-name">
+                <img class="flag-icon" src="{{ url_for('static', filename='flags/us.png') }}" alt="미국 국기">
+                <span>MLB</span>
+            </div>
+            <div class="league-desc">
+                이후 KBO와 동일한 구조로 확장 예정
+            </div>
+        </div>
+        <div>
+            <a class="league-btn" href="/mlb">MLB 바로가기</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}경기 상세{% endblock %}
+
+{% block content %}
+<h1 class="title">{{ game.away_team }} vs {{ game.home_team }}</h1>
+<p class="subtitle">경기 상세 정보</p>
+
+<div class="league-grid">
+    <div class="league-card">
+        <div>
+            <div class="league-name">기본 정보</div>
+            <div class="league-desc">
+                <div><strong>game_id:</strong> {{ game.game_id }}</div>
+                <div><strong>경기일:</strong> {{ game.game_date }}</div>
+                <div><strong>리그:</strong> {{ game.league }}</div>
+                <div><strong>라운드코드:</strong> {{ game.round_code or "-" }}</div>
+                <div><strong>상태코드:</strong> {{ game.status_code or "-" }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="league-card">
+        <div>
+            <div class="league-name">선발투수</div>
+            <div class="league-desc">
+                <div><strong>원정 선발:</strong> {{ game.away_starter_name or "-" }}</div>
+                <div><strong>원정 pcode:</strong> {{ game.away_starter_pcode or "-" }}</div>
+                <br>
+                <div><strong>홈 선발:</strong> {{ game.home_starter_name or "-" }}</div>
+                <div><strong>홈 pcode:</strong> {{ game.home_starter_pcode or "-" }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="league-card">
+        <div>
+            <div class="league-name">다음 단계 예정</div>
+            <div class="league-desc">
+                선발투수 누적 / 최근 로그 / 팀 누적 / 선발타자 누적 연결
+            </div>
+        </div>
+    </div>
+</div>
+
+<div style="text-align: center; margin-top: 24px;">
+    <a class="league-btn" href="/kbo">KBO 목록으로</a>
+</div>
+{% endblock %}

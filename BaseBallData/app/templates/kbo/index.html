@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}KBO 당일 경기{% endblock %}
+
+{% block content %}
+<h1 class="title">KBO 당일 경기</h1>
+<p class="subtitle">기준일: {{ today }}</p>
+
+{% if games %}
+    <div class="league-grid">
+        {% for game in games %}
+            <div class="league-card">
+                <div>
+                    <div class="league-name">{{ game.away_team }} vs {{ game.home_team }}</div>
+                    <div class="league-desc">
+                        <div><strong>상태코드:</strong> {{ game.status_code or "-" }}</div>
+                        <div><strong>라운드코드:</strong> {{ game.round_code or "-" }}</div>
+                        <div><strong>원정 선발:</strong> {{ game.away_starter_name or "-" }}</div>
+                        <div><strong>홈 선발:</strong> {{ game.home_starter_name or "-" }}</div>
+                    </div>
+                </div>
+                <div>
+                    <a class="league-btn" href="/kbo/game/{{ game.game_id }}">상세 보기</a>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="card" style="text-align: center;">
+        <p>오늘 등록된 KBO 경기가 없습니다.</p>
+    </div>
+{% endif %}
+{% endblock %}
