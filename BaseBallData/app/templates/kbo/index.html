@@ -13,8 +13,6 @@
                 <div>
                     <div class="league-name">{{ game.away_team }} vs {{ game.home_team }}</div>
                     <div class="league-desc">
-                        <div><strong>상태코드:</strong> {{ game.status_code or "-" }}</div>
-                        <div><strong>라운드코드:</strong> {{ game.round_code or "-" }}</div>
                         <div><strong>원정 선발:</strong> {{ game.away_starter_name or "-" }}</div>
                         <div><strong>홈 선발:</strong> {{ game.home_starter_name or "-" }}</div>
                     </div>

@@ -7,8 +7,8 @@ import os
 
 today = datetime.today()
 
-from_date = (today - timedelta(days=5)).strftime('%Y-%m-%d')
-to_date = (today + timedelta(days=5)).strftime('%Y-%m-%d')
+from_date = (today - timedelta(days=10)).strftime('%Y-%m-%d')
+to_date = (today + timedelta(days=10)).strftime('%Y-%m-%d')
 
 headers = {
     'accept': 'application/json, text/plain, */*',
@@ -41,13 +41,146 @@ params = {
 
 DB_PATH = 'kbo.db'
 
+print("kbo_data.py DB 경로:", os.path.abspath(DB_PATH))
 # 디버그 함수, 추후에 지울 것
 
 DEBUG = True
 
+def export_recent_results_to_excel(db_path='kbo.db', output_dir='exports'):
+    os.makedirs(output_dir, exist_ok=True)
+
+    conn = sqlite3.connect(db_path)
+
+    query = """
+    SELECT *
+    FROM games
+    WHERE status_code = 'RESULT'
+      AND game_date < date('now', 'localtime')
+    ORDER BY game_date DESC, game_id
+    """
+
+    df_games = pd.read_sql(query, conn)
+
+    if df_games.empty:
+        conn.close()
+        print('엑셀로 뽑을 완료 경기 데이터가 없습니다.')
+        return None
+
+    game_ids = df_games['game_id'].tolist()
+    placeholders = ",".join(["?"] * len(game_ids))
+
+    df_lineups = pd.read_sql(
+        f"SELECT * FROM starting_lineups WHERE game_id IN ({placeholders}) ORDER BY game_date DESC, team_type, bat_order",
+        conn,
+        params=game_ids
+    )
+    df_batters = pd.read_sql(
+        f"SELECT * FROM batters WHERE game_id IN ({placeholders}) ORDER BY game_date DESC, team_type, bat_order",
+        conn,
+        params=game_ids
+    )
+    df_batter_events = pd.read_sql(
+        f"SELECT * FROM batter_inning_events WHERE game_id IN ({placeholders}) ORDER BY game_date DESC, team_type, inning, bat_order",
+        conn,
+        params=game_ids
+    )
+    df_team_totals = pd.read_sql(
+        f"SELECT * FROM team_totals WHERE game_id IN ({placeholders}) ORDER BY game_date DESC, team_type",
+        conn,
+        params=game_ids
+    )
+    df_first_pitch = pd.read_sql(
+        f"SELECT * FROM first_pitch WHERE game_id IN ({placeholders}) ORDER BY game_date DESC, inning",
+        conn,
+        params=game_ids
+    )
+    df_pitcher_events = pd.read_sql(
+        f"SELECT * FROM pitcher_events WHERE game_id IN ({placeholders}) ORDER BY game_date DESC, team_type, event_inning",
+        conn,
+        params=game_ids
+    )
+    df_starting_pitcher_stats = pd.read_sql(
+        f"SELECT * FROM starting_pitcher_stats WHERE game_id IN ({placeholders}) ORDER BY game_date DESC",
+        conn,
+        params=game_ids
+    )
+    df_game_flow_summary = pd.read_sql(
+        f"SELECT * FROM game_flow_summary WHERE game_id IN ({placeholders}) ORDER BY game_date DESC",
+        conn,
+        params=game_ids
+    )
+
+    conn.close()
+
+    today_str = datetime.today().strftime('%Y%m%d')
+    output_path = os.path.join(output_dir, f'kbo_results_until_yesterday_{today_str}.xlsx')
+
+    with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+        df_games.to_excel(writer, sheet_name='games', index=False)
+        df_lineups.to_excel(writer, sheet_name='starting_lineups', index=False)
+        df_batters.to_excel(writer, sheet_name='batters', index=False)
+        df_batter_events.to_excel(writer, sheet_name='batter_events', index=False)
+        df_team_totals.to_excel(writer, sheet_name='team_totals', index=False)
+        df_first_pitch.to_excel(writer, sheet_name='first_pitch', index=False)
+        df_pitcher_events.to_excel(writer, sheet_name='pitcher_events', index=False)
+        df_starting_pitcher_stats.to_excel(writer, sheet_name='starting_pitcher_stats', index=False)
+        df_game_flow_summary.to_excel(writer, sheet_name='game_flow_summary', index=False)
+
+    print(f'엑셀 생성 완료: {output_path}')
+    return output_path
+
 def dprint(*args, **kwargs):
     if DEBUG:
         print(*args, **kwargs)
+
+def inn_to_outs(inn_value):
+    """
+    예:
+    '5'     -> 15
+    '5 ⅓'   -> 16
+    '5 ⅔'   -> 17
+    '6 1/3' -> 19
+    '6 2/3' -> 20
+    """
+    if inn_value in [None, '']:
+        return 0
+
+    s = str(inn_value).strip()
+    s = ' '.join(s.split())
+
+    parts = s.split()
+
+    try:
+        base_inning = int(parts[0])
+    except:
+        return 0
+
+    outs = base_inning * 3
+
+    if ('⅓' in s) or ('1/3' in s):
+        outs += 1
+    elif ('⅔' in s) or ('2/3' in s):
+        outs += 2
+
+    return outs
+
+
+def calc_bb9(bb_value, inn_value):
+    """
+    BB/9 = BB * 27 / 아웃카운트
+    반환값은 문자열 또는 소수 둘째자리 반올림 값
+    """
+    try:
+        bb = float(bb_value)
+    except:
+        return ''
+
+    outs = inn_to_outs(inn_value)
+    if outs == 0:
+        return ''
+
+    bb9 = bb * 27 / outs
+    return round(bb9, 2)
 
 
 def safe_int(value, default=0):
@@ -220,6 +353,7 @@ def create_tables():
         away_ab TEXT,
         away_era TEXT,
         away_wls TEXT,
+        away_bb9 REAL,
 
         home_pitcher_name TEXT,
         home_pitcher_pcode TEXT,
@@ -235,7 +369,8 @@ def create_tables():
         home_bf TEXT,
         home_ab TEXT,
         home_era TEXT,
-        home_wls TEXT
+        home_wls TEXT,
+        home_bb9 REAL
     )
     """)
 
@@ -284,6 +419,11 @@ def create_tables():
     """)
 
     conn.commit()
+    cur.execute("PRAGMA table_info(starting_pitcher_stats)")
+    cols = cur.fetchall()
+    print("starting_pitcher_stats 컬럼들:")
+    for col in cols:
+        print(col)
     conn.close()
 
 
@@ -304,7 +444,7 @@ def insert_game(
     cur = conn.cursor()
 
     cur.execute("""
-    INSERT OR IGNORE INTO games (
+    INSERT OR REPLACE INTO games (
         game_id,
         game_date,
         league,
@@ -611,6 +751,7 @@ def insert_starting_pitcher_stats_rows(rows):
         away_ab,
         away_era,
         away_wls,
+        away_bb9,
 
         home_pitcher_name,
         home_pitcher_pcode,
@@ -626,8 +767,9 @@ def insert_starting_pitcher_stats_rows(rows):
         home_bf,
         home_ab,
         home_era,
-        home_wls
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        home_wls,
+        home_bb9
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, [
         (
             row['game_id'],
@@ -650,6 +792,7 @@ def insert_starting_pitcher_stats_rows(rows):
             row['away_ab'],
             row['away_era'],
             row['away_wls'],
+            row['away_bb9'],
 
             row['home_pitcher_name'],
             row['home_pitcher_pcode'],
@@ -665,7 +808,8 @@ def insert_starting_pitcher_stats_rows(rows):
             row['home_bf'],
             row['home_ab'],
             row['home_era'],
-            row['home_wls']
+            row['home_wls'],
+            row['home_bb9']
         )
         for row in rows
     ])
@@ -771,6 +915,9 @@ def safe_float(value, default=0.0):
     except:
         return default
 
+def replace_lineup_rows(all_rows, new_rows, game_id):
+    filtered = [r for r in all_rows if r['game_id'] != game_id]
+    return filtered + new_rows
 
 def get_pitcher_search_end_inning(inn_value):
     if inn_value in [None, '']:
@@ -841,6 +988,12 @@ def extract_starting_pitcher_stats_row(
     away_pitcher,
     home_pitcher
 ):
+    away_inn = away_pitcher.get('inn', '')
+    away_bb = away_pitcher.get('bb', '')
+
+    home_inn = home_pitcher.get('inn', '')
+    home_bb = home_pitcher.get('bb', '')
+
     return {
         'game_id': game_id,
         'game_date': game_date,
@@ -850,10 +1003,10 @@ def extract_starting_pitcher_stats_row(
         'away_pitcher_name': away_pitcher.get('name', ''),
         'away_pitcher_pcode': str(away_pitcher.get('pcode', away_pitcher.get('playerCode', ''))).strip(),
         'away_g': away_pitcher.get('g', ''),
-        'away_inn': away_pitcher.get('inn', ''),
+        'away_inn': away_inn,
         'away_r': away_pitcher.get('r', ''),
         'away_er': away_pitcher.get('er', ''),
-        'away_bb': away_pitcher.get('bb', ''),
+        'away_bb': away_bb,
         'away_hbp': away_pitcher.get('hbp', ''),
         'away_kk': away_pitcher.get('kk', ''),
         'away_hit': away_pitcher.get('hit', ''),
@@ -862,14 +1015,15 @@ def extract_starting_pitcher_stats_row(
         'away_ab': away_pitcher.get('ab', ''),
         'away_era': away_pitcher.get('era', ''),
         'away_wls': away_pitcher.get('wls', ''),
+        'away_bb9': calc_bb9(away_bb, away_inn),
 
         'home_pitcher_name': home_pitcher.get('name', ''),
         'home_pitcher_pcode': str(home_pitcher.get('pcode', home_pitcher.get('playerCode', ''))).strip(),
         'home_g': home_pitcher.get('g', ''),
-        'home_inn': home_pitcher.get('inn', ''),
+        'home_inn': home_inn,
         'home_r': home_pitcher.get('r', ''),
         'home_er': home_pitcher.get('er', ''),
-        'home_bb': home_pitcher.get('bb', ''),
+        'home_bb': home_bb,
         'home_hbp': home_pitcher.get('hbp', ''),
         'home_kk': home_pitcher.get('kk', ''),
         'home_hit': home_pitcher.get('hit', ''),
@@ -877,7 +1031,8 @@ def extract_starting_pitcher_stats_row(
         'home_bf': home_pitcher.get('bf', ''),
         'home_ab': home_pitcher.get('ab', ''),
         'home_era': home_pitcher.get('era', ''),
-        'home_wls': home_pitcher.get('wls', '')
+        'home_wls': home_pitcher.get('wls', ''),
+        'home_bb9': calc_bb9(home_bb, home_inn)
     }
 
 def extract_game_flow_summary_row(
@@ -1311,11 +1466,79 @@ def extract_team_batting_total_rows(record_data, game_date, game_id, away_team, 
 
     return rows
 
+
+
+def get_record_data(game_id):
+    record_url = f'https://api-gw.sports.naver.com/schedule/games/{game_id}/record'
+
+    try:
+        response = requests.get(record_url, headers=headers, timeout=10)
+        record_json = response.json()
+    except Exception as e:
+        dprint(f'[record 요청 실패] {game_id} / {e}')
+        return None
+
+    return record_json.get('result', {}).get('recordData')
+
+
+def get_preview_data(game_id):
+    preview_url = f'https://api-gw.sports.naver.com/schedule/games/{game_id}/preview'
+
+    try:
+        pre_response = requests.get(preview_url, headers=headers, timeout=10)
+        pre_json = pre_response.json()
+    except Exception as e:
+        dprint(f'[preview 요청 실패] {game_id} / {e}')
+        return None
+
+    return pre_json.get('result', {}).get('previewData')
+
+
+def extract_preview_lineup_rows(preview_data, game_date, game_id, away_team, home_team):
+    rows = []
+
+    away_full_lineup = preview_data.get('awayTeamLineUp', {}).get('fullLineUp', [])
+    home_full_lineup = preview_data.get('homeTeamLineUp', {}).get('fullLineUp', [])
+
+    # preview 활성화 전이면 []
+    if not away_full_lineup or not home_full_lineup:
+        return rows
+
+    # 0번은 선발투수, 1~9가 선발타자라고 가정
+    for idx in range(1, min(len(away_full_lineup), 10)):
+        player = away_full_lineup[idx]
+        rows.append({
+            'game_date': game_date,
+            'game_id': game_id,
+            'team_type': 'away',
+            'team_name': away_team,
+            'batOrder': player.get('batorder', idx),
+            'name': player.get('playerName', ''),
+            'pcode': str(player.get('playerCode', '')).strip(),
+            'posName': player.get('positionName', ''),
+            'pos': player.get('position', ''),
+            'seqno': '1'
+        })
+
+    for idx in range(1, min(len(home_full_lineup), 10)):
+        player = home_full_lineup[idx]
+        rows.append({
+            'game_date': game_date,
+            'game_id': game_id,
+            'team_type': 'home',
+            'team_name': home_team,
+            'batOrder': player.get('batorder', idx),
+            'name': player.get('playerName', ''),
+            'pcode': str(player.get('playerCode', '')).strip(),
+            'posName': player.get('positionName', ''),
+            'pos': player.get('position', ''),
+            'seqno': '1'
+        })
+
+    return rows
+
 def run_kbo_build():
-
-
     create_tables()
-
 
     response = requests.get(
         'https://api-gw.sports.naver.com/schedule/games',
@@ -1323,7 +1546,7 @@ def run_kbo_build():
         headers=headers
     )
 
-    TEST_GAME_ID =None
+    TEST_GAME_ID = None
 
     games = response.json()['result']['games']
 
@@ -1340,56 +1563,172 @@ def run_kbo_build():
         game_id = game.get('gameId', '')
         if TEST_GAME_ID and game_id != TEST_GAME_ID:
             continue
+
         game_date = game.get('gameDate', '')
         home_team = game.get('homeTeamName', '')
         away_team = game.get('awayTeamName', '')
-        home_starting = game.get('homeStarterName', '')
-        away_starting = game.get('awayStarterName', '')
+
+        # preview 이전 단계 선발 이름
+        home_pre_pre_pitcher = game.get('homeStarterName', '')
+        away_pre_pre_pitcher = game.get('awayStarterName', '')
+
         status_code = str(game.get('statusCode', '')).strip()
         round_code = str(game.get('roundCode', '')).strip().lower()
-
-
 
         dprint('=' * 80)
         dprint('game_id     :', game_id)
         dprint('game_date   :', game_date)
         dprint('away_team   :', away_team)
         dprint('home_team   :', home_team)
-        dprint('away_start  :', away_starting)
-        dprint('home_start  :', home_starting)
+        dprint('away_start  :', away_pre_pre_pitcher)
+        dprint('home_start  :', home_pre_pre_pitcher)
         dprint('status_code :', status_code)
         dprint('round_code  :', round_code)
-
-
-        if status_code != 'RESULT':
-            dprint('RESULT 경기 아님 -> 스킵')
-            continue
 
         if round_code == 'kbo_e':
             dprint('시범경기(kbo_e) -> 스킵')
             continue
 
-        # 시범경기 제외
-        # if round_code == 'kbo_e':
-        #     continue
-        # 끝난경기만 포함
-        # if status_code != 'RESULT':
-        #     continue
+        # -----------------------------------
+        # 1단계: schedule 기본값
+        # -----------------------------------
+        away_starter_name = away_pre_pre_pitcher
+        home_starter_name = home_pre_pre_pitcher
+        away_starter_pcode = ''
+        home_starter_pcode = ''
 
-        record_url = f'https://api-gw.sports.naver.com/schedule/games/{game_id}/record'
-        record_response = requests.get(record_url, headers=headers)
-        record_json = record_response.json()
+        # -----------------------------------
+        # 2단계: preview 보강
+        # preview가 열리면 선발 pcode/라인업 반영
+        # -----------------------------------
+        preview_data = get_preview_data(game_id)
 
-        if 'result' not in record_json or 'recordData' not in record_json['result']:
+        if preview_data:
+            away_full_lineup = preview_data.get('awayTeamLineUp', {}).get('fullLineUp', [])
+            home_full_lineup = preview_data.get('homeTeamLineUp', {}).get('fullLineUp', [])
+
+            dprint('preview away_full_lineup len:', len(away_full_lineup))
+            dprint('preview home_full_lineup len:', len(home_full_lineup))
+
+            if away_full_lineup:
+                away_pitcher_info = away_full_lineup[0]
+                dprint(
+                    f"[preview 원정 선발 감지] {game_id} / "
+                    f"{away_pitcher_info.get('playerName', '')} / "
+                    f"{away_pitcher_info.get('playerCode', '')}"
+                )
+
+            if home_full_lineup:
+                home_pitcher_info = home_full_lineup[0]
+                dprint(
+                    f"[preview 홈 선발 감지] {game_id} / "
+                    f"{home_pitcher_info.get('playerName', '')} / "
+                    f"{home_pitcher_info.get('playerCode', '')}"
+                )
+
+            if away_full_lineup and home_full_lineup:
+                # 0번 = 선발투수
+                away_pitcher_info = away_full_lineup[0]
+                home_pitcher_info = home_full_lineup[0]
+
+                away_starter_name = away_pitcher_info.get('playerName', away_starter_name)
+                home_starter_name = home_pitcher_info.get('playerName', home_starter_name)
+
+                away_starter_pcode = str(away_pitcher_info.get('playerCode', '')).strip()
+                home_starter_pcode = str(home_pitcher_info.get('playerCode', '')).strip()
+
+                preview_lineup_rows = extract_preview_lineup_rows(
+                    preview_data=preview_data,
+                    game_date=game_date,
+                    game_id=game_id,
+                    away_team=away_team,
+                    home_team=home_team
+                )
+
+                if preview_lineup_rows:
+                    all_starting_lineup_rows.extend(preview_lineup_rows)
+                    dprint(f'[preview 라인업 저장대기] {game_id} / {len(preview_lineup_rows)}행')
+
+        # -----------------------------------
+        # games 테이블은 BEFORE/LIVE/RESULT 공통 저장
+        # -----------------------------------
+        insert_game(
+            game_id=game_id,
+            game_date=game_date,
+            league='kbo',
+            round_code=round_code,
+            status_code=status_code,
+            away_team=away_team,
+            home_team=home_team,
+            away_starter_name=away_starter_name,
+            home_starter_name=home_starter_name,
+            away_starter_pcode=away_starter_pcode,
+            home_starter_pcode=home_starter_pcode
+        )
+
+        dprint('[games 저장/갱신]', game_id, away_team, 'vs', home_team, status_code)
+
+        # -----------------------------------
+        # 3단계: record 보강
+        # record가 있으면 preview보다 우선해서 다시 세팅
+        # -----------------------------------
+        record_data = get_record_data(game_id)
+
+        # recordData가 null이면 여기서 끝
+        if not record_data:
+            dprint('recordData 없음 -> games/preview까지만 처리')
             continue
 
-        record_data = record_json['result']['recordData']
-
-        dprint('record_json keys:', record_json.keys())
-        dprint('result keys:', record_json.get('result', {}).keys())
         dprint('record_data keys:', record_data.keys())
 
-        # 팀 타격 합계 row (awayTotal, homeTotal)
+        away_pitchers = record_data.get('pitchersBoxscore', {}).get('away', [])
+        home_pitchers = record_data.get('pitchersBoxscore', {}).get('home', [])
+
+        dprint('away_pitchers len:', len(away_pitchers))
+        dprint('home_pitchers len:', len(home_pitchers))
+
+        if away_pitchers and home_pitchers:
+            away_pitcher = away_pitchers[0]
+            home_pitcher = home_pitchers[0]
+
+            # record 기준이 더 신뢰도 높으니 다시 덮어쓰기
+            away_starter_name = away_pitcher.get('name', away_starter_name)
+            home_starter_name = home_pitcher.get('name', home_starter_name)
+
+            away_starter_pcode = str(
+                away_pitcher.get('pcode', away_pitcher.get('playerCode', away_starter_pcode))
+            ).strip()
+
+            home_starter_pcode = str(
+                home_pitcher.get('pcode', home_pitcher.get('playerCode', home_starter_pcode))
+            ).strip()
+
+            insert_game(
+                game_id=game_id,
+                game_date=game_date,
+                league='kbo',
+                round_code=round_code,
+                status_code=status_code,
+                away_team=away_team,
+                home_team=home_team,
+                away_starter_name=away_starter_name,
+                home_starter_name=home_starter_name,
+                away_starter_pcode=away_starter_pcode,
+                home_starter_pcode=home_starter_pcode
+            )
+
+            dprint('[record 기준 games 재갱신]', game_id, away_starter_name, home_starter_name)
+
+        # -----------------------------------
+        # RESULT 아니면 상세 분석 저장 안 함
+        # -----------------------------------
+        if status_code != 'RESULT':
+            dprint('RESULT 경기 아님 -> record 보강 후 스킵')
+            continue
+
+        # -----------------------------------
+        # 4단계: RESULT 상세 저장
+        # -----------------------------------
         team_total_rows = extract_team_batting_total_rows(
             record_data=record_data,
             game_date=game_date,
@@ -1397,10 +1736,8 @@ def run_kbo_build():
             away_team=away_team,
             home_team=home_team
         )
-
         all_team_total_rows.extend(team_total_rows)
 
-        # 타자 기본 스탯 row
         away_batter_rows = extract_batters_boxscore_rows(
             record_data=record_data,
             game_date=game_date,
@@ -1408,7 +1745,6 @@ def run_kbo_build():
             team_type='away',
             team_name=away_team
         )
-
         home_batter_rows = extract_batters_boxscore_rows(
             record_data=record_data,
             game_date=game_date,
@@ -1416,11 +1752,9 @@ def run_kbo_build():
             team_type='home',
             team_name=home_team
         )
-
         all_batter_rows.extend(away_batter_rows)
         all_batter_rows.extend(home_batter_rows)
 
-        # 타자 이닝별 이벤트 row
         away_batter_event_rows = extract_batter_inning_event_rows(
             record_data=record_data,
             game_date=game_date,
@@ -1428,7 +1762,6 @@ def run_kbo_build():
             team_type='away',
             team_name=away_team
         )
-
         home_batter_event_rows = extract_batter_inning_event_rows(
             record_data=record_data,
             game_date=game_date,
@@ -1436,21 +1769,8 @@ def run_kbo_build():
             team_type='home',
             team_name=home_team
         )
-
-
-        
-
         all_batter_event_rows.extend(away_batter_event_rows)
         all_batter_event_rows.extend(home_batter_event_rows)
-
-
-        away_pitchers = record_data.get('pitchersBoxscore', {}).get('away', [])
-        home_pitchers = record_data.get('pitchersBoxscore', {}).get('home', [])
-
-        dprint('away_pitchers len:', len(away_pitchers))
-        dprint('home_pitchers len:', len(home_pitchers))
-        dprint('away_pitchers[0]:', away_pitchers[0] if away_pitchers else '없음')
-        dprint('home_pitchers[0]:', home_pitchers[0] if home_pitchers else '없음')
 
         if not away_pitchers or not home_pitchers:
             continue
@@ -1459,12 +1779,12 @@ def run_kbo_build():
         home_pitcher = home_pitchers[0]
 
         starting_pitcher_stat_row = extract_starting_pitcher_stats_row(
-        game_id=game_id,
-        game_date=game_date,
-        away_team=away_team,
-        home_team=home_team,
-        away_pitcher=away_pitcher,
-        home_pitcher=home_pitcher
+            game_id=game_id,
+            game_date=game_date,
+            away_team=away_team,
+            home_team=home_team,
+            away_pitcher=away_pitcher,
+            home_pitcher=home_pitcher
         )
         all_starting_pitcher_stat_rows.append(starting_pitcher_stat_row)
 
@@ -1480,7 +1800,7 @@ def run_kbo_build():
         all_game_flow_summary_rows.append(game_flow_summary_row)
 
         kor_away_pitcher_record = {
-            'name': away_pitcher.get('name', away_starting),
+            'name': away_pitcher.get('name', away_starter_name),
             'inn': away_pitcher.get('inn', ''),
             'hit': away_pitcher.get('hit', ''),
             'r': away_pitcher.get('r', ''),
@@ -1494,7 +1814,7 @@ def run_kbo_build():
         }
 
         kor_home_pitcher_record = {
-            'name': home_pitcher.get('name', home_starting),
+            'name': home_pitcher.get('name', home_starter_name),
             'inn': home_pitcher.get('inn', ''),
             'hit': home_pitcher.get('hit', ''),
             'r': home_pitcher.get('r', ''),
@@ -1510,9 +1830,6 @@ def run_kbo_build():
         away_starter_pcode = kor_away_pitcher_record['pcode']
         home_starter_pcode = kor_home_pitcher_record['pcode']
 
-        if not away_starter_pcode or not home_starter_pcode:
-            continue
-
         insert_game(
             game_id=game_id,
             game_date=game_date,
@@ -1521,13 +1838,11 @@ def run_kbo_build():
             status_code=status_code,
             away_team=away_team,
             home_team=home_team,
-            away_starter_name=away_starting,
-            home_starter_name=home_starting,
+            away_starter_name=away_starter_name,
+            home_starter_name=home_starter_name,
             away_starter_pcode=away_starter_pcode,
             home_starter_pcode=home_starter_pcode
         )
-
-        dprint('[DB 저장] games:', game_id, away_team, 'vs', home_team)
 
         away_search_end_inning = get_search_end_inning(kor_away_pitcher_record['inn'])
         home_search_end_inning = get_search_end_inning(kor_home_pitcher_record['inn'])
@@ -1541,10 +1856,6 @@ def run_kbo_build():
         away_walks_all = []
         home_walks_all = []
 
-        print('=' * 100)
-        print(f'{game_date}  {away_team} vs {home_team}')
-        print()
-
         for inning in range(1, max_search_inning + 1):
             relay_url = f'https://api-gw.sports.naver.com/schedule/games/{game_id}/relay?inning={inning}'
             relay_response = requests.get(relay_url, headers=headers)
@@ -1554,7 +1865,7 @@ def run_kbo_build():
             except:
                 continue
 
-            # 1회 relay에서 선발타자 추출 (경기당 1번)
+            # RESULT에서는 relay 기준 라인업도 보강 가능
             if inning == 1:
                 starting_lineup_rows = extract_starting_lineup_rows(
                     relay_data=relay_data,
@@ -1563,32 +1874,12 @@ def run_kbo_build():
                     away_team=away_team,
                     home_team=home_team
                 )
-
-                all_starting_lineup_rows.extend(starting_lineup_rows)
-
-                dprint('[선발타자 추출]')
-                for row in starting_lineup_rows:
-                    dprint(row['team_type'], row['batOrder'], row['name'], row['pcode'])
-
-            dprint('inning:', inning)
-            dprint('relay result keys:', relay_data.get('result', {}).keys())
-            dprint('textRelayData keys:', relay_data.get('result', {}).get('textRelayData', {}).keys())
-
-            text_relays = relay_data.get('result', {}).get('textRelayData', {}).get('textRelays', [])
-            dprint('text_relays len:', len(text_relays))
-
-            for idx, relay in enumerate(text_relays[:5]):
-                dprint(f'text_relays[{idx}] title:', relay.get('title', ''))
-
-            if inning == 1:
-                dprint('----- relay titles / textOptions raw -----')
-                for relay in text_relays:
-                    title = str(relay.get('title', '')).strip()
-                    text_options = relay.get('textOptions', [])
-
-                    dprint(f'[title] {title}')
-                    for option in text_options:
-                        dprint('   text:', option.get('text', ''))
+                if starting_lineup_rows:
+                    all_starting_lineup_rows = replace_lineup_rows(
+                        all_starting_lineup_rows,
+                        starting_lineup_rows,
+                        game_id
+                    )
 
             away_walks, home_walks = extract_walks_from_one_inning(
                 relay_data=relay_data,
@@ -1608,10 +1899,6 @@ def run_kbo_build():
             )
 
             for fp in first_pitch_list:
-                print(
-                    f'{inning}회 -> {fp["batter_name"]} / {fp["pitchResult"]} / {fp["text"]}'
-                )
-
                 first_pitch_rows.append({
                     'game_date': game_date,
                     'game_id': game_id,
@@ -1633,62 +1920,41 @@ def run_kbo_build():
         away_walks_all = away_walks_all[:away_official_bbhb]
         home_walks_all = home_walks_all[:home_official_bbhb]
 
-        print()
-        print(f'[원정 선발] {kor_away_pitcher_record["name"]}')
-        print(f'이닝: {kor_away_pitcher_record["inn"]} / 공식 BB: {kor_away_pitcher_record["bb"]}')
-        if away_walks_all:
-            for row in away_walks_all:
-                print(f'  {row["inning"]}회 - {row["batter_name"]} - {row["result_type"]} - {row["text"]}')
-                all_rows.append({
-                    'game_date': game_date,
-                    'game_id': game_id,
-                    'team_type': 'away',
-                    'pitcher_name': kor_away_pitcher_record['name'],
-                    'pitcher_pcode': away_starter_pcode,
-                    'pitcher_inn': kor_away_pitcher_record['inn'],
-                    'pitcher_bb': kor_away_pitcher_record['bb'],
-                    'walk_inning': row['inning'],
-                    'batter_name': row['batter_name'],
-                    'batter_code': row['batter_code'],
-                    'result_type': row['result_type'],
-                    'text': row['text'],
-                    'away_team': away_team,
-                    'home_team': home_team
-                })
-        else:
-            print('  없음')
+        for row in away_walks_all:
+            all_rows.append({
+                'game_date': game_date,
+                'game_id': game_id,
+                'team_type': 'away',
+                'pitcher_name': kor_away_pitcher_record['name'],
+                'pitcher_pcode': away_starter_pcode,
+                'pitcher_inn': kor_away_pitcher_record['inn'],
+                'pitcher_bb': kor_away_pitcher_record['bb'],
+                'walk_inning': row['inning'],
+                'batter_name': row['batter_name'],
+                'batter_code': row['batter_code'],
+                'result_type': row['result_type'],
+                'text': row['text'],
+                'away_team': away_team,
+                'home_team': home_team
+            })
 
-        print(f'추출 BB/HBP: {len(away_walks_all)}')
-        print()
-
-        print(f'[홈 선발] {kor_home_pitcher_record["name"]}')
-        print(f'이닝: {kor_home_pitcher_record["inn"]} / 공식 BB: {kor_home_pitcher_record["bb"]}')
-        if home_walks_all:
-            for row in home_walks_all:
-                print(f'  {row["inning"]}회 - {row["batter_name"]} - {row["result_type"]} - {row["text"]}')
-                all_rows.append({
-                    'game_date': game_date,
-                    'game_id': game_id,
-                    'team_type': 'home',
-                    'pitcher_name': kor_home_pitcher_record['name'],
-                    'pitcher_pcode': home_starter_pcode,
-                    'pitcher_inn': kor_home_pitcher_record['inn'],
-                    'pitcher_bb': kor_home_pitcher_record['bb'],
-                    'walk_inning': row['inning'],
-                    'batter_name': row['batter_name'],
-                    'batter_code': row['batter_code'],
-                    'result_type': row['result_type'],
-                    'text': row['text'],
-                    'away_team': away_team,
-                    'home_team': home_team
-                })
-        else:
-            print('  없음')
-
-        print(f'추출 BB/HBP: {len(home_walks_all)}')
-        print()
-
-
+        for row in home_walks_all:
+            all_rows.append({
+                'game_date': game_date,
+                'game_id': game_id,
+                'team_type': 'home',
+                'pitcher_name': kor_home_pitcher_record['name'],
+                'pitcher_pcode': home_starter_pcode,
+                'pitcher_inn': kor_home_pitcher_record['inn'],
+                'pitcher_bb': kor_home_pitcher_record['bb'],
+                'walk_inning': row['inning'],
+                'batter_name': row['batter_name'],
+                'batter_code': row['batter_code'],
+                'result_type': row['result_type'],
+                'text': row['text'],
+                'away_team': away_team,
+                'home_team': home_team
+            })
 
     dprint('pitcher stats rows:', len(all_starting_pitcher_stat_rows))
     dprint('summary rows:', len(all_game_flow_summary_rows))
@@ -1717,7 +1983,6 @@ def run_kbo_build():
     insert_game_flow_summary_rows(all_game_flow_summary_rows)
     dprint('경기 흐름 요약 행 수:', len(all_game_flow_summary_rows))
 
-    # 필요하면 확인용
     print('기본 타자행 수:', len(all_batter_rows))
     print('타자 이닝이벤트 행 수:', len(all_batter_event_rows))
     print('팀 타격합계 행 수:', len(all_team_total_rows))
@@ -1802,3 +2067,4 @@ def export_one_game_to_excel(game_id, db_path='kbo.db', output_dir='exports'):
 
 if __name__ == "__main__":
     run_kbo_build()
+    export_recent_results_to_excel()

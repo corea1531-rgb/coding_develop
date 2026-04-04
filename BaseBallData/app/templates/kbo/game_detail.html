@@ -9,13 +9,22 @@
 <div class="league-grid">
     <div class="league-card">
         <div>
-            <div class="league-name">기본 정보</div>
+            <div class="league-name">매칭 정보</div>
             <div class="league-desc">
-                <div><strong>game_id:</strong> {{ game.game_id }}</div>
+                 <br> 
                 <div><strong>경기일:</strong> {{ game.game_date }}</div>
                 <div><strong>리그:</strong> {{ game.league }}</div>
-                <div><strong>라운드코드:</strong> {{ game.round_code or "-" }}</div>
-                <div><strong>상태코드:</strong> {{ game.status_code or "-" }}</div>
+                <div><strong>경기상태:</strong>
+    {% if game.status_code == "BEFORE" %}
+        경기전
+    {% elif game.status_code == "LIVE" %}
+        경기중
+    {% elif game.status_code == "RESULT" %}
+        경기마감
+    {% else %}
+        {{ game.status_code or "-" }}
+    {% endif %}
+</div>
             </div>
         </div>
     </div>
@@ -23,24 +32,122 @@
     <div class="league-card">
         <div>
             <div class="league-name">선발투수</div>
-            <div class="league-desc">
+            <div class="league-desc" style="font-size: 18px; line-height: 1.9;">
+
+                <br> 
                 <div><strong>원정 선발:</strong> {{ game.away_starter_name or "-" }}</div>
-                <div><strong>원정 pcode:</strong> {{ game.away_starter_pcode or "-" }}</div>
+
                 <br>
                 <div><strong>홈 선발:</strong> {{ game.home_starter_name or "-" }}</div>
-                <div><strong>홈 pcode:</strong> {{ game.home_starter_pcode or "-" }}</div>
+        
             </div>
         </div>
     </div>
 
     <div class="league-card">
         <div>
-            <div class="league-name">다음 단계 예정</div>
+            <div class="league-name">조회 기간</div>
             <div class="league-desc">
-                선발투수 누적 / 최근 로그 / 팀 누적 / 선발타자 누적 연결
+                <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+                    <a class="league-btn" href="/kbo/game/{{ game.game_id }}?range=7">7경기</a>
+                    <a class="league-btn" href="/kbo/game/{{ game.game_id }}?range=14">14경기</a>
+                    <a class="league-btn" href="/kbo/game/{{ game.game_id }}?range=30">30경기</a>
+                    <a class="league-btn" href="/kbo/game/{{ game.game_id }}?range=all">전체</a>
+                </div>
+                <div style="margin-top:12px;">
+                    현재 선택: <strong>{{ selected_range }}경기</strong>
+                </div>
             </div>
         </div>
     </div>
+</div>
+
+<div class="card">
+    <h2 style="margin-top:0;">원정 선발 최근 기록</h2>
+    <p><strong>{{ game.away_starter_name or "-" }}</strong></p>
+
+    {% if away_pitcher_logs %}
+        <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:#f3f4f6;">
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">날짜</th>
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">경기</th>
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">이닝</th>
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">실점</th>
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">자책</th>
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">삼진</th>
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">볼넷</th>
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">피안타</th>
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">ERA</th>
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">승패</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in away_pitcher_logs %}
+                    <tr>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.game_date }}</td>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.away_team }} vs {{ row.home_team }}</td>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.inn }}</td>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.r }}</td>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.er }}</td>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.kk }}</td>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.bb }}</td>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.hit }}</td>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.era }}</td>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.wls }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p>조회 가능한 기록이 없습니다.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2 style="margin-top:0;">홈 선발 최근 기록</h2>
+    <p><strong>{{ game.home_starter_name or "-" }}</strong></p>
+
+    {% if home_pitcher_logs %}
+        <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:#f3f4f6;">
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">날짜</th>
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">경기</th>
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">이닝</th>
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">실점</th>
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">자책</th>
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">삼진</th>
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">볼넷</th>
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">피안타</th>
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">ERA</th>
+                        <th style="padding:10px; border-bottom:1px solid #ddd; text-align:center;">승패</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in home_pitcher_logs %}
+                    <tr>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.game_date }}</td>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.away_team }} vs {{ row.home_team }}</td>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.inn }}</td>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.r }}</td>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.er }}</td>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.kk }}</td>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.bb }}</td>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.hit }}</td>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.era }}</td>
+                        <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">{{ row.wls }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p>조회 가능한 기록이 없습니다.</p>
+    {% endif %}
 </div>
 
 <div style="text-align: center; margin-top: 24px;">
