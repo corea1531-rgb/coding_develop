@@ -16,7 +16,12 @@ def kbo_index():
         date_str = datetime.now().strftime("%Y-%m-%d")
 
     games = get_today_games(date_str)
-    return render_template("kbo/index.html", games=games, today=date_str)
+
+    return render_template(
+        "kbo/index.html",
+        games=games,
+        today=date_str
+    )
 
 
 @kbo_bp.route("/game/<game_id>")
@@ -27,9 +32,19 @@ def game_detail(game_id):
     if not detail:
         abort(404)
 
+    game = detail["game"]
+
+    game_time = (
+        game.get("game_time")
+        or game.get("start_time")
+        or game.get("display_time")
+        or ""
+    )
+
     return render_template(
         "kbo/game_detail.html",
-        game=detail["game"],
+        game=game,
+        game_time=game_time,
         away_pitcher_logs=detail["away_pitcher_logs"],
         home_pitcher_logs=detail["home_pitcher_logs"],
         selected_range=detail["selected_range"],

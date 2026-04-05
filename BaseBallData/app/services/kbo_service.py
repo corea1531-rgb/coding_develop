@@ -9,6 +9,7 @@ def get_today_games(today_str):
     SELECT
         game_id,
         game_date,
+        game_time,
         league,
         round_code,
         status_code,
@@ -39,6 +40,7 @@ def get_game_basic_info(game_id):
     SELECT
         game_id,
         game_date,
+        game_time,
         league,
         round_code,
         status_code,
@@ -101,6 +103,7 @@ def get_pitcher_recent_stats(pcode, limit_type="7"):
             away_ab AS ab,
             away_era AS era,
             away_wls AS wls,
+            away_bb9 AS bb9,
             'away' AS team_type
         FROM starting_pitcher_stats
         WHERE away_pitcher_pcode = ?
@@ -127,6 +130,7 @@ def get_pitcher_recent_stats(pcode, limit_type="7"):
             home_ab AS ab,
             home_era AS era,
             home_wls AS wls,
+            home_bb9 AS bb9,
             'home' AS team_type
         FROM starting_pitcher_stats
         WHERE home_pitcher_pcode = ?

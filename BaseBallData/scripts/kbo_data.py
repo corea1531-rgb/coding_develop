@@ -200,6 +200,7 @@ def create_tables():
     CREATE TABLE IF NOT EXISTS games (
         game_id TEXT PRIMARY KEY,
         game_date TEXT,
+        game_time TEXT,
         league TEXT,
         round_code TEXT,
         status_code TEXT,
@@ -430,6 +431,7 @@ def create_tables():
 def insert_game(
     game_id,
     game_date,
+    game_time,
     league,
     round_code,
     status_code,
@@ -447,6 +449,7 @@ def insert_game(
     INSERT OR REPLACE INTO games (
         game_id,
         game_date,
+        game_time,
         league,
         round_code,
         status_code,
@@ -456,10 +459,11 @@ def insert_game(
         home_starter_name,
         away_starter_pcode,
         home_starter_pcode
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         game_id,
         game_date,
+        game_time,
         league,
         round_code,
         status_code,
@@ -1565,6 +1569,11 @@ def run_kbo_build():
             continue
 
         game_date = game.get('gameDate', '')
+
+        # 게임 시간
+        game_time = game.get('gameDateTime','')
+        game_time_only = game_time.split('T')[1][:5] if game_time and 'T' in game_time else ''
+
         home_team = game.get('homeTeamName', '')
         away_team = game.get('awayTeamName', '')
 
@@ -1655,6 +1664,7 @@ def run_kbo_build():
         insert_game(
             game_id=game_id,
             game_date=game_date,
+            game_time=game_time_only,
             league='kbo',
             round_code=round_code,
             status_code=status_code,
@@ -1706,6 +1716,7 @@ def run_kbo_build():
             insert_game(
                 game_id=game_id,
                 game_date=game_date,
+                game_time=game_time_only,
                 league='kbo',
                 round_code=round_code,
                 status_code=status_code,
@@ -1833,6 +1844,7 @@ def run_kbo_build():
         insert_game(
             game_id=game_id,
             game_date=game_date,
+            game_time=game_time_only,
             league='kbo',
             round_code=round_code,
             status_code=status_code,
