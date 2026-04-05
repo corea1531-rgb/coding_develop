@@ -19,6 +19,36 @@
             padding: 0 20px;
         }
 
+        .top-nav {
+            display: flex;
+            justify-content: center;
+            gap: 18px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+
+        .top-nav a {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 90px;
+            height: 52px;
+            text-decoration: none;
+            color: #222;
+            font-size: 14px;
+            font-weight: 700;
+            background: #ffffff;
+            padding: 0;
+            border-radius: 12px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .top-nav a:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+        }
+
         .page-title {
             text-align: center;
             font-size: 28px;
@@ -42,8 +72,6 @@
         .game-card {
             display: block;
             background: #ffffff;
-            justify-content: center;
-            align-items: center;
             text-align: center;
             border-radius: 12px;
             padding: 16px 16px;
@@ -104,17 +132,41 @@
             .game-list {
                 grid-template-columns: repeat(2, 1fr);
             }
+
+            .top-nav a {
+                width: 82px;
+                height: 48px;
+                font-size: 13px;
+            }
         }
 
         @media (max-width: 600px) {
             .game-list {
                 grid-template-columns: 1fr;
             }
+
+            .top-nav {
+                gap: 12px;
+            }
+
+            .top-nav a {
+                width: 74px;
+                height: 42px;
+                font-size: 12px;
+                border-radius: 10px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="wrap">
+        <div class="top-nav">
+            <a href="/">홈</a>
+            <a href="/kbo">KBO</a>
+            <a href="/npb">NPB</a>
+            <a href="/mlb">MLB</a>
+        </div>
+
         <div class="page-title">KBO 오늘 경기</div>
         <div class="page-date">{{ today }}</div>
 
